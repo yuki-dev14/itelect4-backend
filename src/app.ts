@@ -1,13 +1,26 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth";
 import itemRoutes from "./routes/items";
 
 const app = express();
+const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors());
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get("/", (_req, res) => {
   res.json({
