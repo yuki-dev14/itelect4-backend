@@ -32,7 +32,7 @@ const itemSchema = new Schema<Item>(
       max: [100000, "Reward cannot exceed 100000"],
       default: 0,
     },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   {
     timestamps: true,

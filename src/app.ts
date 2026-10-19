@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth";
 import itemRoutes from "./routes/items";
+import claimRoutes from "./routes/claims";
 
 const app = express();
 const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
@@ -29,7 +30,8 @@ app.get("/", (_req, res) => {
       "/api/health",
       "/api/auth/register",
       "/api/auth/login",
-      "/api/items"
+      "/api/items",
+      "/api/claims"
     ]
   });
 });
@@ -40,6 +42,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemRoutes);
+app.use("/api/claims", claimRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Route not found" });
