@@ -8,10 +8,16 @@ import claimRoutes from "./routes/claims";
 import aiRoutes from "./routes/ai";
 
 const app = express();
-const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173")
+const defaultOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://itelect4-project-it4b.vercel.app",
+];
+const configuredOrigins = (process.env.CORS_ORIGIN ?? "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
 
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
