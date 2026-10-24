@@ -32,3 +32,5 @@ export default function auth(req: Request, res: Response, next: NextFunction): v
     res.status(401).json({ message: "Invalid or expired token" });
   }
 }
+
+export const requireAuth = auth;

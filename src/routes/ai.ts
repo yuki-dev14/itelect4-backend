@@ -1,39 +1,38 @@
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
-import { z } from "zod";
-import auth from "../middleware/auth";
-import { AiConfigurationError, AiReplyError, reviewProject } from "../ai/gemini";
+import { ApiError } from "@google/genai";
+import { requireAuth } from "../middleware/auth";
+import { aiRequestSchema } from "../schemas/review";
+import { reviewProject, AiReplyError } from "../ai/gemini";
 
-const router = Router();
-const aiRequestSchema = z.object({
-  prompt: z
-    .string()
-    .trim()
-    .min(20, "Describe your project in at least 20 characters.")
-    .max(2000, "Keep your project description to 2000 characters or fewer."),
-});
+export const aiRouter = Router();
 
-const reviewLimiter = rateLimit({
+// Private, like submissions. Every call spends YOUR Gemini quota, so
+// an anonymous visitor must not be able to make one.
+aiRouter.use(requireAuth);
+
+// Five requests a minute per account. It sits below requireAuth, so
+// req.userId exists by the time the limiter reads it -- and the limit
+// follows the account, not the network the request came from. A
+// whole classroom shares one Wi-Fi address; counting by address
+// would make 50 students share 5 requests.
+const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 5,
-  standardHeaders: true,
+  keyGenerator: (req: Request) => req.userId!,
+  standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req: Request) => {
-    if (!req.userId) {
-      throw new Error("Authentication middleware must run before the AI rate limiter");
-    }
-    return req.userId;
-  },
-  handler: (_req, res) => {
-    res.status(429).json({
-      message: "Five reviews a minute is the limit. Try again shortly.",
-    });
+  message: {
+    message: "Five reviews a minute is the limit. Try again shortly.",
   },
 });
 
-router.use(auth, reviewLimiter);
+aiRouter.use(aiLimiter);
 
-router.post("/", async (req, res) => {
+// POST /api/ai
+aiRouter.post("/", async (req: Request, res: Response) => {
+  // safeParse, not parse: it returns the problem instead of throwing
+  // it, so the 400 is written here, next to the rule it reports.
   const parsed = aiRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
@@ -45,40 +44,31 @@ router.post("/", async (req, res) => {
 
   try {
     const review = await reviewProject(parsed.data.prompt);
-    res.status(200).json(review);
-  } catch (error) {
-    if (error instanceof AiConfigurationError) {
-      console.error("Gemini is not configured:", error.message);
-      res.status(500).json({ message: "AI review is not configured." });
+    res.json(review);
+  } catch (err) {
+    // 429 from Gemini means the quota of the Google project behind
+    // GEMINI_API_KEY is used up -- not this API's own limit above.
+    if (err instanceof ApiError && err.status === 429) {
+      res.status(429).json({
+        message: "The AI quota is used up for now. Try again later.",
+      });
       return;
     }
 
-    if (error instanceof AiReplyError) {
-      console.error("Gemini returned an invalid review:", error.message);
-      res.status(502).json({ message: "Gemini could not produce a valid review. Please try again." });
+    // Gemini refused, failed, or answered with something unusable.
+    // Log the real reason for Vercel's Runtime Logs; the browser
+    // gets a sentence and none of Google's error text.
+    if (err instanceof ApiError || err instanceof AiReplyError) {
+      console.error(err);
+      res.status(502).json({
+        message: "The AI service did not answer properly. Try again.",
+      });
       return;
     }
 
-    const status = getErrorStatus(error);
-    console.error("Gemini request failed:", error);
-    if (status === 429) {
-      res.status(429).json({ message: "Gemini's request quota is temporarily exhausted. Try again shortly." });
-      return;
-    }
-    res.status(502).json({ message: "The AI review service is temporarily unavailable." });
+    // Anything else is a bug in this app: app.ts's error handler.
+    throw err;
   }
 });
 
-function getErrorStatus(error: unknown): number | undefined {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    typeof error.status === "number"
-  ) {
-    return error.status;
-  }
-  return undefined;
-}
-
-export default router;
+export default aiRouter;
