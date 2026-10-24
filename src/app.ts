@@ -18,8 +18,19 @@ const configuredOrigins = (process.env.CORS_ORIGIN ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const allowedOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
+const frontendPreviewOrigin =
+  /^https:\/\/itelect4-project-it4b-[a-z0-9-]+-euclids-projects-447a0a30\.vercel\.app$/i;
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({
+  origin(origin, callback) {
+    callback(
+      null,
+      origin === undefined ||
+        allowedOrigins.includes(origin) ||
+        frontendPreviewOrigin.test(origin),
+    );
+  },
+}));
 app.use(express.json());
 app.use(async (_req, _res, next) => {
   try {
