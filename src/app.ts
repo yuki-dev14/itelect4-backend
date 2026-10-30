@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import mongoose from "mongoose";
@@ -84,4 +85,5 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ message });
 });
 
+export { app };
 export default app;

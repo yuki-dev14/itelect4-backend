@@ -14,23 +14,28 @@ export default function auth(req: Request, res: Response, next: NextFunction): v
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined;
   const secret = process.env.JWT_SECRET;
 
-  if (!token || !secret) {
-    res.status(401).json({ message: "Authentication required" });
+  if (!token) {
+    res.status(401).json({ message: "No token. Send Authorization: Bearer <token>" });
+    return;
+  }
+
+  if (!secret) {
+    res.status(401).json({ message: "Token is invalid or has expired" });
     return;
   }
 
   try {
     const payload = jwt.verify(token, secret);
     if (typeof payload !== "object" || typeof payload.userId !== "string") {
-      res.status(401).json({ message: "Invalid token" });
+      res.status(401).json({ message: "Token is invalid or has expired" });
       return;
     }
 
     req.userId = payload.userId;
     next();
   } catch {
-    res.status(401).json({ message: "Invalid or expired token" });
+    res.status(401).json({ message: "Token is invalid or has expired" });
   }
 }
 
-export const requireAuth = auth;
+export const requireAuth = auth;
